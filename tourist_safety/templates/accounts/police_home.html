@@ -40,16 +40,33 @@ async function fetchEvents(){
       const title = `${ev.tourist_full_name || ev.tourist_username} — ${new Date(ev.created_at).toLocaleString()}`;
       const entry = document.createElement('div');
       entry.className = 'p-2 border mb-2';
+      let audioHtml = "";
+      if (ev.audio_files && ev.audio_files.length > 0) {
+        audioHtml = "<div><strong>Audio Evidence:</strong><br/>";
+        ev.audio_files.forEach((url, i) => {
+          audioHtml += `
+            <audio controls style="width:100%; margin:4px 0;">
+              <source src="${url}" type="audio/webm">
+              Your browser does not support audio playback.
+            </audio>`;
+        });
+        audioHtml += "</div>";
+      }
+
       entry.innerHTML = `
-  <div style="display:flex; align-items:center; justify-content:space-between;">
-    <div>
-      <strong>${title}</strong><br/>
-      Lat: ${ev.lat || 'N/A'} Lon: ${ev.lon || 'N/A'}
+  <div style="display:flex; flex-direction:column;">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <div>
+        <strong>SOS from ${ev.tourist_full_name || ev.tourist_username}</strong><br/>
+        Lat: ${ev.lat || 'N/A'} Lon: ${ev.lon || 'N/A'}<br/>
+        <small>${new Date(ev.created_at).toLocaleString()}</small>
+      </div>
+      <div>
+        <a class="btn btn-sm btn-outline-primary" target="_blank"
+           href="/police/fir/${ev.sos_id}/pdf/">Generate FIR (PDF)</a>
+      </div>
     </div>
-    <div>
-      <a class="btn btn-sm btn-outline-primary" target="_blank"
-         href="/police/fir/${ev.sos_id}/pdf/">Generate FIR (PDF)</a>
-    </div>
+    ${audioHtml}
   </div>`;
       list.appendChild(entry);
 

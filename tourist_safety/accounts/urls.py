@@ -13,5 +13,7 @@ urlpatterns = [
     path('api/sos/', views.api_sos, name='api_sos'),
     path('police/api/active_sos/', views.api_active_sos, name='api_active_sos'),  # we'll add view below
     path('police/fir/<int:sos_id>/pdf/', views.generate_fir_pdf, name='generate_fir_pdf'),
+    path('api/sos/<int:sos_id>/upload_audio/', views.upload_sos_audio, name='upload_sos_audio'),
+
 
 ]

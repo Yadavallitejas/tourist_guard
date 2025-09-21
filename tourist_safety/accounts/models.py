@@ -75,3 +75,13 @@ class SOSEvent(models.Model):
 
     def __str__(self):
         return f"SOS: {self.tourist.username} at {self.created_at} (active={self.is_active})"
+
+from django.db import models
+
+class SOSAudio(models.Model):
+    sos_event = models.ForeignKey(SOSEvent, on_delete=models.CASCADE, related_name="audios")
+    file = models.FileField(upload_to="sos_audio/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Audio for SOS {self.sos_event.id} at {self.uploaded_at}"

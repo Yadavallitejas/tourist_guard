@@ -11,7 +11,7 @@ import json
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.utils import timezone
-from .models import Location, SOSEvent
+from .models import Location, SOSEvent, SOSAudio
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt  # we prefer CSRF via token; keep login_required
 
@@ -165,7 +165,7 @@ def api_active_sos(request):
     if not request.user.is_police():
         return HttpResponseForbidden("Only police can access SOS events.")
     # get active SOS events (optionally filter recent)
-    events = SOSEvent.objects.filter(is_active=True).select_related('tourist').order_by('-created_at')[:200]
+    events = SOSEvent.objects.filter(is_active=True).select_related('tourist').prefetch_related('audios').order_by('-created_at')[:200]
     out = []
     for e in events:
         # get last 1 location for this tourist (most recent)
@@ -177,6 +177,7 @@ def api_active_sos(request):
             'created_at': e.created_at.isoformat(),
             'lat': e.lat or (last_loc.latitude if last_loc else None),
             'lon': e.lon or (last_loc.longitude if last_loc else None),
+            'audio_files': [a.file.url for a in e.audios.all().order_by('uploaded_at')],
         })
     return JsonResponse({'events': out})
 
@@ -314,3 +315,61 @@ def generate_fir_pdf(request, sos_id):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     response.write(pdf)
     return response
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+import json
+
+@csrf_exempt
+@login_required
+def upload_sos_audio(request, sos_id):
+    if not request.user.is_tourist():
+        return JsonResponse({"error": "Only tourists can upload audio."}, status=403)
+
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    try:
+        sos = SOSEvent.objects.get(id=sos_id, tourist=request.user)
+    except SOSEvent.DoesNotExist:
+        return JsonResponse({"error": "SOS not found"}, status=404)
+
+    if "audio" not in request.FILES:
+        return JsonResponse({"error": "No audio file uploaded"}, status=400)
+
+    audio_file = request.FILES["audio"]
+
+    # Save file
+    sos_audio = SOSAudio.objects.create(sos_event=sos, file=audio_file)
+
+    return JsonResponse({
+        "status": "ok",
+        "audio_id": sos_audio.id,
+        "file_url": sos_audio.file.url
+    })
+# accounts/views.py (inside get_sos_events)
+def get_sos_events(request):
+    if not request.user.is_police():
+        return JsonResponse({"error": "Forbidden"}, status=403)
+
+    events = SOSEvent.objects.select_related("tourist").prefetch_related("audios").order_by("-created_at")[:50]
+
+    data = []
+    for ev in events:
+        # try full name, fallback to username
+        try:
+            name = ev.tourist.tourist_profile.full_name
+        except:
+            name = ev.tourist.username
+        data.append({
+            "sos_id": ev.id,
+            "tourist": name,
+            "lat": ev.lat,
+            "lon": ev.lon,
+            "created_at": ev.created_at.isoformat(),
+            "audio_files": [a.file.url for a in ev.audios.order_by("uploaded_at")],
+        })
+    return JsonResponse({"events": data})

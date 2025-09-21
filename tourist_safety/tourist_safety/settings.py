@@ -106,6 +106,8 @@ AUTH_PASSWORD_VALIDATORS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Police registration keys (comma-separated in env)
 POLICE_REGISTRATION_KEYS = os.environ.get('POLICE_REGISTRATION_KEYS', '').split(',')
 

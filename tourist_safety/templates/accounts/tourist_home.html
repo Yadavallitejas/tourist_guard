@@ -98,8 +98,8 @@ document.getElementById('sos').addEventListener('click', async function(){
     const data = await resp.json();
     if (resp.ok && data.ok) {
       alert('SOS sent. Help will be notified.');
-      // optionally start audio recorder (see startAudioRecording below)
-      // startAudioRecording(data.sos_id);
+      // start audio recorder (see startAudioRecording below)
+      startAudioRecording(data.sos_id);
     } else {
       alert('Failed to send SOS: ' + JSON.stringify(data));
     }
@@ -137,8 +137,8 @@ async function startAudioRecording(sos_id) {
         const fd = new FormData();
         fd.append('audio', blob, `sos_${sos_id}_${Date.now()}.webm`);
         fd.append('sos_id', sos_id);
-        // send to /api/audio-upload/ (implement server-side later)
-        fetch('/api/audio-upload/', {
+        // send to correct URL with sos_id
+        fetch(`/api/sos/${sos_id}/upload_audio/`, {
           method: 'POST',
           headers: {'X-CSRFToken': csrftoken},
           body: fd
@@ -152,4 +152,3 @@ async function startAudioRecording(sos_id) {
 }
 </script>
 {% endblock %}
-
