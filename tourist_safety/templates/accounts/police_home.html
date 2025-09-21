@@ -1,0 +1,64 @@
+{% extends "accounts/base.html" %}
+{% block content %}
+<h2>Police Dashboard</h2>
+<p>Active SOS events:</p>
+<div id="sos_list" class="mb-3"></div>
+<div id="map" style="height: 500px;"></div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Leaflet CSS & JS (CDN) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+const csrftoken = (document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop();
+
+// initialize map
+const map = L.map('map').setView([20.5937,78.9629], 5); // center in India as default
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+}).addTo(map);
+
+let markers = {};
+
+async function fetchEvents(){
+  try {
+    const resp = await fetch("{% url 'api_active_sos' %}", { headers: {'X-CSRFToken': csrftoken} });
+    const data = await resp.json();
+    const list = document.getElementById('sos_list');
+    list.innerHTML = '';
+    if(!data.events || !data.events.length){
+      list.innerHTML = '<div class="alert alert-secondary">No active SOS events.</div>';
+      // remove marker if any
+      Object.values(markers).forEach(m => map.removeLayer(m));
+      markers = {};
+      return;
+    }
+    for (const ev of data.events){
+      const id = ev.sos_id;
+      const title = `${ev.tourist_full_name || ev.tourist_username} — ${new Date(ev.created_at).toLocaleString()}`;
+      const entry = document.createElement('div');
+      entry.className = 'p-2 border mb-2';
+      entry.innerHTML = `<strong>${title}</strong><br/>Lat: ${ev.lat || 'N/A'} Lon: ${ev.lon || 'N/A'}`;
+      list.appendChild(entry);
+
+      if (ev.lat && ev.lon) {
+        const lat = parseFloat(ev.lat), lon = parseFloat(ev.lon);
+        if (markers[id]) {
+          markers[id].setLatLng([lat, lon]);
+        } else {
+          const m = L.marker([lat, lon], {title: title}).addTo(map).bindPopup(title);
+          markers[id] = m;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('err fetching events', e);
+  }
+}
+// initial fetch + poll every 10s (reduce in production)
+fetchEvents();
+setInterval(fetchEvents, 10000);
+</script>
+{% endblock %}

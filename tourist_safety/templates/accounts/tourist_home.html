@@ -1,0 +1,155 @@
+{% extends "accounts/base.html" %}
+{% block content %}
+<div class="text-center my-5">
+  <h2>Welcome, {{ user.username }}</h2>
+  <p class="lead">Tap SOS if you're in danger.</p>
+
+  <button id="sos" class="sos-btn" title="Press and hold to send SOS">SOS</button>
+  <p class="mt-3 small text-muted">Only press in real emergencies.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Helper to get CSRF token for POST requests (Django default) */
+function getCookie(name) {
+  const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return v ? v.pop() : '';
+}
+const csrftoken = getCookie('csrftoken');
+
+const positionBuffer = []; // stores {latitude,longitude,accuracy,timestampISO}
+const BUFFER_MINUTES = 10;
+const POLL_INTERVAL_MS = 30 * 1000; // collect location every 30s (adjust for mobile)
+
+// Ensure geolocation permission prompt as soon as home loads (optional)
+if (navigator.permissions) {
+  navigator.permissions.query({name:'geolocation'}).then(function(res){
+    // console.log('geo permission', res.state);
+  });
+}
+
+function pruneBuffer() {
+  const cutoff = Date.now() - BUFFER_MINUTES * 60 * 1000;
+  while (positionBuffer.length && new Date(positionBuffer[0].timestamp).getTime() < cutoff) {
+    positionBuffer.shift();
+  }
+}
+
+function addPosition(position) {
+  positionBuffer.push({
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    timestamp: new Date().toISOString()
+  });
+  pruneBuffer();
+  // optional: show last known coordinates in UI
+  // document.getElementById('lastpos').innerText = JSON.stringify(positionBuffer[positionBuffer.length-1]);
+}
+
+// Polling function
+async function capturePosition() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(addPosition, function(err){
+    console.warn('geo err', err);
+  }, {enableHighAccuracy: true, maximumAge: 15*1000, timeout: 15000});
+}
+
+// start polling
+capturePosition();
+setInterval(capturePosition, POLL_INTERVAL_MS);
+
+// Allow manual quick capture before SOS
+document.getElementById('sos').addEventListener('click', async function(){
+  if (!navigator.geolocation) {
+    alert('Geolocation not supported');
+    return;
+  }
+  this.disabled = true;
+  this.innerText = 'Sending SOS...';
+
+  // make sure we have a fresh position (try to get current position once)
+  try {
+    await new Promise((res, rej) => {
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        addPosition(pos); res();
+      }, function(err) { console.warn('fresh pos failed', err); res(); }, {enableHighAccuracy:true, timeout:10000});
+    });
+  } catch(e) { console.warn(e); }
+
+  pruneBuffer(); // ensure only last 10 minutes
+
+  // Prepare payload
+  const payload = {
+    locations: positionBuffer.slice(),  // send full recent buffer
+    description: 'SOS triggered from tourist app'
+  };
+
+  try {
+    const resp = await fetch("{% url 'api_sos' %}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrftoken
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if (resp.ok && data.ok) {
+      alert('SOS sent. Help will be notified.');
+      // optionally start audio recorder (see startAudioRecording below)
+      // startAudioRecording(data.sos_id);
+    } else {
+      alert('Failed to send SOS: ' + JSON.stringify(data));
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Error sending SOS: ' + err.message);
+  }
+  this.disabled = false;
+  this.innerText = 'SOS';
+});
+
+/* Simple audio recording starter (optional)
+   NOTE: capturing microphone requires HTTPS in browsers and user permission.
+   This is a skeleton — you'll need server-side endpoints to accept audio blobs.
+*/
+let mediaRecorder, audioChunks = [];
+async function startAudioRecording(sos_id) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => {
+      if (e.data.size > 0) {
+        audioChunks.push(e.data);
+      }
+    };
+    mediaRecorder.start();
+    // every minute, stop, send chunk, then restart
+    setInterval(async () => {
+      if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+      mediaRecorder.requestData();
+      // send the collected chunk(s)
+      if (audioChunks.length) {
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        const fd = new FormData();
+        fd.append('audio', blob, `sos_${sos_id}_${Date.now()}.webm`);
+        fd.append('sos_id', sos_id);
+        // send to /api/audio-upload/ (implement server-side later)
+        fetch('/api/audio-upload/', {
+          method: 'POST',
+          headers: {'X-CSRFToken': csrftoken},
+          body: fd
+        }).catch(err => console.warn('audio upload err', err));
+        audioChunks = [];
+      }
+    }, 60*1000);
+  } catch (e) {
+    console.warn('Audio permission denied or error', e);
+  }
+}
+</script>
+{% endblock %}
+
