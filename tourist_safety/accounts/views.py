@@ -373,3 +373,106 @@ def get_sos_events(request):
             "audio_files": [a.file.url for a in ev.audios.order_by("uploaded_at")],
         })
     return JsonResponse({"events": data})
+
+import math
+from .models import DangerZone
+
+def haversine(lat1, lon1, lat2, lon2):
+    # returns distance in meters
+    R = 6371000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+def is_in_danger(lat, lon):
+    for zone in DangerZone.objects.all():
+        d = haversine(lat, lon, zone.center_lat, zone.center_lon)
+        if d <= zone.radius_m:
+            return zone
+    return None
+
+# accounts/views.py
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.timezone import now
+from django.http import JsonResponse
+
+@csrf_exempt
+def update_location(request):
+    if not request.user.is_authenticated or not request.user.is_tourist():
+        return JsonResponse({"error": "Forbidden"}, status=403)
+
+    lat = float(request.POST.get("lat"))
+    lon = float(request.POST.get("lon"))
+
+    # Save location (optional: keep history)
+    profile = request.user.tourist_profile
+    profile.last_lat = lat
+    profile.last_lon = lon
+    profile.last_updated = now()
+    profile.save()
+
+    # Check geofence
+    zone = is_in_danger(lat, lon)
+    if zone:
+        return JsonResponse({"status": "ok", "alert": f"You are entering danger zone: {zone.name}"})
+    else:
+        return JsonResponse({"status": "ok"})
+
+def get_zones(request):
+    zones = DangerZone.objects.all()
+    return JsonResponse({"zones": [
+        {"name": z.name, "lat": z.center_lat, "lon": z.center_lon, "radius_m": z.radius_m}
+        for z in zones
+    ]})
+
+# accounts/views.py
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from .forms import DangerZoneForm
+from .models import DangerZone
+
+@login_required
+def dangerzone_list(request):
+    if not request.user.is_police():
+        return redirect("home")
+    zones = DangerZone.objects.all()
+    return render(request, "accounts/dangerzone_list.html", {"zones": zones})
+
+@login_required
+def dangerzone_create(request):
+    if not request.user.is_police():
+        return redirect("home")
+    if request.method == "POST":
+        form = DangerZoneForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("dangerzone_list")
+    else:
+        form = DangerZoneForm()
+    return render(request, "accounts/dangerzone_form.html", {"form": form})
+
+@login_required
+def dangerzone_edit(request, pk):
+    if not request.user.is_police():
+        return redirect("home")
+    zone = get_object_or_404(DangerZone, pk=pk)
+    if request.method == "POST":
+        form = DangerZoneForm(request.POST, instance=zone)
+        if form.is_valid():
+            form.save()
+            return redirect("dangerzone_list")
+    else:
+        form = DangerZoneForm(instance=zone)
+    return render(request, "accounts/dangerzone_form.html", {"form": form})
+
+@login_required
+def dangerzone_delete(request, pk):
+    if not request.user.is_police():
+        return redirect("home")
+    zone = get_object_or_404(DangerZone, pk=pk)
+    if request.method == "POST":
+        zone.delete()
+        return redirect("dangerzone_list")
+    return render(request, "accounts/dangerzone_confirm_delete.html", {"zone": zone})

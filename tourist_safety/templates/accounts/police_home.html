@@ -68,6 +68,7 @@ async function fetchEvents(){
     </div>
     ${audioHtml}
   </div>`;
+
       list.appendChild(entry);
 
       if (ev.lat && ev.lon) {
@@ -75,7 +76,11 @@ async function fetchEvents(){
         if (markers[id]) {
           markers[id].setLatLng([lat, lon]);
         } else {
-          const m = L.marker([lat, lon], {title: title}).addTo(map).bindPopup(title);
+          const m = L.circle([lat, lon], {
+            color: "red",
+            radius: 500,
+            fillOpacity: 0.2
+          }).addTo(map).bindPopup(title);
           markers[id] = m;
         }
       }
@@ -87,5 +92,19 @@ async function fetchEvents(){
 // initial fetch + poll every 10s (reduce in production)
 fetchEvents();
 setInterval(fetchEvents, 10000);
+
+// Load danger zones overlay
+async function loadZones(map) {
+  const resp = await fetch("/api/zones/");
+  const data = await resp.json();
+  data.zones.forEach(zone => {
+    L.circle([zone.lat, zone.lon], {
+      color: "red",
+      radius: zone.radius_m,
+      fillOpacity: 0.2
+    }).addTo(map).bindPopup("Danger Zone: " + zone.name);
+  });
+}
+loadZones(map);
 </script>
 {% endblock %}

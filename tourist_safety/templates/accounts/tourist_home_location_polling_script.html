@@ -1,0 +1,29 @@
+<script>
+// New polling location script sending lat/lon every 30s to /api/location/update/
+async function sendLocation() {
+  if (!navigator.geolocation) {
+    console.log("No GPS available");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const fd = new FormData();
+    fd.append("lat", pos.coords.latitude);
+    fd.append("lon", pos.coords.longitude);
+
+    const resp = await fetch("/api/location/update/", {
+      method: "POST",
+      body: fd,
+      credentials: "include"
+    });
+    const data = await resp.json();
+
+    if (data.alert) {
+      alert("⚠️ " + data.alert);
+    }
+  });
+}
+
+// Send every 30s
+setInterval(sendLocation, 30000);
+</script>

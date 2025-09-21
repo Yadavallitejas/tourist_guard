@@ -85,3 +85,16 @@ class SOSAudio(models.Model):
 
     def __str__(self):
         return f"Audio for SOS {self.sos_event.id} at {self.uploaded_at}"
+
+# accounts/models.py
+from django.db import models
+
+class DangerZone(models.Model):
+    name = models.CharField(max_length=255)
+    center_lat = models.FloatField()
+    center_lon = models.FloatField()
+    radius_m = models.FloatField(help_text="Radius in meters")
+
+    def __str__(self):
+        return self.name
+

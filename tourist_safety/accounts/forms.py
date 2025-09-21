@@ -78,3 +78,16 @@ class PoliceRegistrationForm(UserCreationForm):
             from .models import PoliceProfile
             PoliceProfile.objects.create(user=user, is_verified=True)
         return user
+# accounts/forms.py
+from django import forms
+from .models import DangerZone
+
+# accounts/forms.py
+class DangerZoneForm(forms.ModelForm):
+    class Meta:
+        model = DangerZone
+        fields = ["name", "radius_m", "center_lat", "center_lon"]
+        widgets = {
+            "center_lat": forms.HiddenInput(),
+            "center_lon": forms.HiddenInput(),
+        }

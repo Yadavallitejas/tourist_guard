@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{% if form.instance.pk %}Edit Danger Zone{% else %}Add Danger Zone{% endif %}</h2>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.name.label_tag }} {{ form.name }} <br><br>
+  {{ form.radius_m.label_tag }} {{ form.radius_m }} (meters) <br><br>
+
+  <!-- Hidden lat/lon -->
+  {{ form.center_lat }} {{ form.center_lon }}
+
+  <div id="map" style="height:400px; margin-top:20px;"></div>
+
+  <button type="submit" class="btn btn-success" style="margin-top:20px;">Save</button>
+  <a href="{% url 'dangerzone_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // Default center (India approx)
+  let lat = {{ form.instance.center_lat|default:20 }};
+  let lon = {{ form.instance.center_lon|default:78 }};
+  let radius = {{ form.instance.radius_m|default:500 }};
+
+  let map = L.map("map").setView([lat, lon], 6);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  // Circle marker (movable by clicking map)
+  let circle = L.circle([lat, lon], { radius: radius, color: "red" }).addTo(map);
+
+  function updateForm(lat, lon) {
+    document.getElementById("id_center_lat").value = lat;
+    document.getElementById("id_center_lon").value = lon;
+  }
+
+  // Update when clicking map
+  map.on("click", function (e) {
+    circle.setLatLng(e.latlng);
+    updateForm(e.latlng.lat, e.latlng.lng);
+  });
+
+  // Update when radius field changes
+  document.getElementById("id_radius_m").addEventListener("input", function () {
+    let r = parseInt(this.value) || 500;
+    circle.setRadius(r);
+  });
+
+  // Fill initial values
+  updateForm(lat, lon);
+});
+</script>
+{% endblock %}

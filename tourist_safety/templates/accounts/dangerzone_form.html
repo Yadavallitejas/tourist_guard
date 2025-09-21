@@ -1,0 +1,62 @@
+{% extends "accounts/base.html" %}
+{% block content %}
+<h2>{% if form.instance.pk %}Edit{% else %}Add{% endif %} Danger Zone</h2>
+<form method="post" novalidate>
+  {% csrf_token %}
+  {{ form.as_p }}
+
+  <div id="map" style="height: 400px; margin-bottom: 1rem;"></div>
+
+  <button type="submit" class="btn btn-primary">Save</button>
+  <a href="{% url 'dangerzone_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+
+<!-- Leaflet CSS & JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  // Initialize map
+  const map = L.map('map').setView([20.5937, 78.9629], 5); // Center on India
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+  }).addTo(map);
+
+  // Marker for selected center
+  let marker = null;
+
+  // Get hidden inputs for center_lat and center_lon
+  const latInput = document.getElementById('id_center_lat');
+  const lonInput = document.getElementById('id_center_lon');
+
+  // If existing values, set marker
+  if (latInput.value && lonInput.value) {
+    const lat = parseFloat(latInput.value);
+    const lon = parseFloat(lonInput.value);
+    marker = L.marker([lat, lon], { draggable: true }).addTo(map);
+    map.setView([lat, lon], 13);
+  }
+
+  // On map click, set marker and update hidden inputs
+  map.on('click', function(e) {
+    const { lat, lng } = e.latlng;
+    if (marker) {
+      marker.setLatLng(e.latlng);
+    } else {
+      marker = L.marker(e.latlng, { draggable: true }).addTo(map);
+    }
+    latInput.value = lat.toFixed(6);
+    lonInput.value = lng.toFixed(6);
+  });
+
+  // Update hidden inputs when marker dragged
+  if (marker) {
+    marker.on('dragend', function(e) {
+      const pos = e.target.getLatLng();
+      latInput.value = pos.lat.toFixed(6);
+      lonInput.value = pos.lng.toFixed(6);
+    });
+  }
+</script>
+{% endblock %}
