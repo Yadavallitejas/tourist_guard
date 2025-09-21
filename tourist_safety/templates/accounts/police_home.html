@@ -40,7 +40,17 @@ async function fetchEvents(){
       const title = `${ev.tourist_full_name || ev.tourist_username} — ${new Date(ev.created_at).toLocaleString()}`;
       const entry = document.createElement('div');
       entry.className = 'p-2 border mb-2';
-      entry.innerHTML = `<strong>${title}</strong><br/>Lat: ${ev.lat || 'N/A'} Lon: ${ev.lon || 'N/A'}`;
+      entry.innerHTML = `
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <div>
+      <strong>${title}</strong><br/>
+      Lat: ${ev.lat || 'N/A'} Lon: ${ev.lon || 'N/A'}
+    </div>
+    <div>
+      <a class="btn btn-sm btn-outline-primary" target="_blank"
+         href="/police/fir/${ev.sos_id}/pdf/">Generate FIR (PDF)</a>
+    </div>
+  </div>`;
       list.appendChild(entry);
 
       if (ev.lat && ev.lon) {
