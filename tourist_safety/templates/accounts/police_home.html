@@ -73,16 +73,42 @@ async function fetchEvents(){
 
       if (ev.lat && ev.lon) {
         const lat = parseFloat(ev.lat), lon = parseFloat(ev.lon);
-        if (markers[id]) {
-          markers[id].setLatLng([lat, lon]);
-        } else {
-          const m = L.circle([lat, lon], {
-            color: "red",
-            radius: 500,
-            fillOpacity: 0.2
-          }).addTo(map).bindPopup(title);
-          markers[id] = m;
+      if (markers[id]) {
+        markers[id].setLatLng([lat, lon]);
+      } else {
+        // Check if user is in danger zone (approximate by checking if inside any danger zone circle)
+        // For simplicity, assume danger zones are loaded in a global array dangerZones
+        let inDanger = false;
+        if (window.dangerZones) {
+          for (const zone of window.dangerZones) {
+            const distance = map.distance([lat, lon], [zone.lat, zone.lon]);
+            if (distance <= zone.radius_m) {
+              inDanger = true;
+              break;
+            }
+          }
         }
+        const markerOptions = {
+          title: title
+        };
+        if (inDanger) {
+          markerOptions.icon = L.icon({
+            iconUrl: 'https://maps.google.com/mapfiles/ms/icons/orange-dot.png',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+          });
+        } else {
+          markerOptions.icon = L.icon({
+            iconUrl: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+          });
+        }
+        const m = L.marker([lat, lon], markerOptions).addTo(map).bindPopup(title);
+        markers[id] = m;
+      }
       }
     }
   } catch (e) {
@@ -97,6 +123,7 @@ setInterval(fetchEvents, 10000);
 async function loadZones(map) {
   const resp = await fetch("/api/zones/");
   const data = await resp.json();
+  window.dangerZones = data.zones; // store globally for marker color logic
   data.zones.forEach(zone => {
     L.circle([zone.lat, zone.lon], {
       color: "red",
